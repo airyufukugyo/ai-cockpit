@@ -1,0 +1,9 @@
+# publish ONLY the PWA shell + defs.json (no secrets).
+*
+!index.html
+!app.js
+!sw.js
+!manifest.json
+!icon.svg
+!defs.json
+!.gitignore

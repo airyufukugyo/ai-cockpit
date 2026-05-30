@@ -1,0 +1,19 @@
+{
+  "name": "Secretary Cockpit",
+  "short_name": "Cockpit",
+  "description": "ゲーム化タスク＋プロジェクト司令塔（Google直結・どこでもライブ更新）",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

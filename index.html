@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b1120">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Secretary Cockpit</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0b1120;--bg2:#111c33;--card:#16233f;--line:#243352;--txt:#e8eefc;
+--dim:#8aa0c6;--gold:#f59e0b;--grn:#22c55e;--cyan:#38bdf8;--red:#f87171;--vio:#a78bfa}
+body{font-family:'Segoe UI',-apple-system,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
+background:radial-gradient(ellipse 900px 500px at 80% -5%,rgba(56,189,248,.12),transparent 60%),
+radial-gradient(ellipse 700px 600px at 0% 30%,rgba(167,139,250,.1),transparent 55%),var(--bg);
+color:var(--txt);min-height:100vh;padding:14px 14px calc(92px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+.wrap{max-width:680px;margin:0 auto}
+header{display:flex;align-items:center;gap:10px;margin:4px 0 12px}
+header .logo{font-size:22px}header h1{font-size:1.05rem;flex:1}
+.gear{background:none;border:none;color:var(--dim);font-size:1.3rem;cursor:pointer}
+.hero{background:linear-gradient(135deg,var(--bg2),var(--card));border:1px solid var(--line);
+border-radius:18px;padding:15px;display:grid;grid-template-columns:auto 1fr auto;gap:13px;align-items:center}
+.ring{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;
+background:conic-gradient(var(--gold) var(--p,0%),#2a3a5e 0);position:relative}
+.ring::after{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--bg2)}
+.ring b{position:relative;z-index:1;font-size:1.4rem;color:var(--gold)}
+.lvl small{display:block;text-align:center;color:var(--dim);font-size:.62rem;margin-top:4px;letter-spacing:.1em}
+.xprow{display:flex;justify-content:space-between;font-size:.76rem;color:var(--dim);margin-bottom:5px}
+.xprow b{color:var(--txt)}
+.xpbar{height:12px;background:#26354f;border-radius:99px;overflow:hidden}
+.xpbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold),#fbbf24);
+width:0;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+.totxp{font-size:.7rem;color:var(--dim);margin-top:6px}.totxp b{color:var(--gold)}
+.side{text-align:center}.side .n{font-size:1.4rem;font-weight:800;color:var(--gold)}
+.side .n.cold{color:var(--dim)}.side small{display:block;font-size:.6rem;color:var(--dim)}
+.qp{font-size:.64rem;color:var(--dim);margin-top:6px}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;background:rgba(11,17,32,.93);backdrop-filter:blur(12px);
+border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;background:none;border:none;color:var(--dim);padding:10px 4px 12px;font-size:.68rem;
+cursor:pointer;display:flex;flex-direction:column;gap:3px;align-items:center}
+nav.tabs button .i{font-size:1.15rem}nav.tabs button.on{color:var(--cyan)}
+.view{display:none;margin-top:14px}.view.on{display:block;animation:fade .25s both}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.sec{font-size:.72rem;color:var(--dim);letter-spacing:.15em;text-transform:uppercase;margin:16px 2px 8px;
+display:flex;align-items:center;gap:8px}.sec::after{content:'';flex:1;height:1px;
+background:linear-gradient(90deg,var(--line),transparent)}.sec .cnt{color:var(--cyan)}
+.task{background:var(--card);border:1px solid var(--line);border-radius:13px;margin:8px 0;overflow:hidden;transition:.2s}
+.task.done{opacity:.6}.trow{display:flex;align-items:flex-start;gap:11px;padding:13px 14px}
+.cb{width:25px;height:25px;border-radius:8px;border:2px solid #3a4d72;flex:none;cursor:pointer;
+display:grid;place-items:center;margin-top:1px;background:#0e1a30;transition:.18s}
+.cb.on{background:linear-gradient(135deg,var(--grn),#16a34a);border-color:var(--grn)}
+.cb svg{width:15px;height:15px;stroke:#06150c;stroke-width:3.5;fill:none;
+stroke-dasharray:20;stroke-dashoffset:20;transition:stroke-dashoffset .25s}.cb.on svg{stroke-dashoffset:0}
+.tmain{flex:1;min-width:0;cursor:pointer}.tt{font-size:.92rem;line-height:1.5}
+.task.done .tt{text-decoration:line-through;color:var(--dim)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chip{font-size:.65rem;padding:3px 8px;border-radius:7px;background:#0e1a30;border:1px solid var(--line);color:var(--dim)}
+.chip.xp{color:var(--gold);border-color:#78350f;background:#241a08}.chip.tag{color:var(--vio);border-color:#4c1d95}
+.chip.due{color:var(--gold);border-color:#78350f}
+.tbody{max-height:0;overflow:hidden;transition:max-height .3s}.task.open .tbody{max-height:600px}
+.tbody pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:.8rem;color:var(--dim);
+padding:0 14px 13px;line-height:1.7}
+.card2{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:15px;margin:12px 0}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:5px}.hd h2{font-size:1rem;flex:1}.hd .pct{font-size:1.2rem;font-weight:800}
+.bar{height:9px;background:#26354f;border-radius:99px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;border-radius:99px;width:0;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+.tag2{color:var(--dim);font-size:.74rem}
+.boss{display:flex;align-items:center;gap:11px;margin:10px 0;padding:11px;border-radius:12px;background:#0e1a30;border:1px solid var(--line)}
+.boss .em{font-size:1.4rem;filter:grayscale(.4)}.boss.beat .em{filter:none}
+.boss .bi{flex:1;min-width:0}.boss .bn{font-size:.84rem;font-weight:700}.boss .bn small{color:var(--dim);font-weight:400;font-size:.68rem}
+.hpbar{height:9px;background:#3a1418;border-radius:99px;overflow:hidden;margin-top:6px}
+.hpbar i{display:block;height:100%;border-radius:99px;width:0;background:linear-gradient(90deg,var(--red),#fb7185);transition:width 1s}
+.boss.beat .hpbar i{background:linear-gradient(90deg,var(--grn),#4ade80)}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
+.bd{background:#0e1a30;border:1px solid var(--line);border-radius:13px;padding:12px 8px;text-align:center}
+.bd.got{border-color:var(--gold);background:linear-gradient(160deg,#241a08,#0e1a30)}
+.bd .e{font-size:1.6rem;filter:grayscale(1);opacity:.4}.bd.got .e{filter:none;opacity:1}
+.bd .n{font-size:.68rem;color:var(--dim);margin-top:4px}.bd.got .n{color:var(--txt)}
+.heat{display:flex;gap:3px;overflow-x:auto;padding:6px 0}.heat .col{display:flex;flex-direction:column;gap:3px}
+.heat .cell{width:13px;height:13px;border-radius:3px;background:#1b2942}
+.heat .cell.l1{background:#14532d}.heat .cell.l2{background:#16a34a}.heat .cell.l3{background:#22c55e}.heat .cell.l4{background:#86efac}
+.btn{background:linear-gradient(135deg,var(--cyan),#0ea5e9);color:#04121f;border:none;border-radius:10px;
+padding:12px 16px;font-weight:700;cursor:pointer;font-size:.9rem;width:100%}
+.btn.ghost{background:var(--bg2);color:var(--txt);border:1px solid var(--line)}
+.btn:active{transform:scale(.98)}
+.kpi-form{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi-form input{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--txt);font-size:.84rem;min-width:0}
+.kpi-form input.full,.kpi-form .btn{grid-column:1/-1}
+.msg{font-size:.78rem;color:var(--dim);margin-top:8px;min-height:1em}
+.empty{text-align:center;color:var(--dim);padding:46px 16px}.empty p{margin-bottom:16px;line-height:1.7}
+#modal{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:rgba(4,8,18,.75);backdrop-filter:blur(4px);padding:18px}
+#modal.show{display:grid}.modal-box{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:440px;width:100%}
+.modal-box h2{font-size:1.05rem;margin-bottom:6px}.modal-box p{font-size:.8rem;color:var(--dim);line-height:1.7;margin-bottom:12px}
+.modal-box label{font-size:.76rem;color:var(--dim);display:block;margin:10px 0 4px}
+.modal-box input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:11px;color:var(--txt);font-size:.84rem}
+#toast{position:fixed;left:50%;top:78px;transform:translateX(-50%);z-index:50;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.xptoast{background:linear-gradient(135deg,var(--gold),#fbbf24);color:#1a1205;font-weight:800;padding:8px 18px;border-radius:99px;
+font-size:1.05rem;box-shadow:0 8px 24px -6px rgba(245,158,11,.7);animation:pop .3s both,fup 1.3s .6s forwards}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes fup{to{transform:translateY(-26px);opacity:0}}
+#lvlup{position:fixed;inset:0;z-index:65;display:none;place-items:center;background:rgba(4,8,18,.7);backdrop-filter:blur(3px)}
+#lvlup.show{display:grid;animation:fade .3s both}#lvlup .big{font-size:3rem;font-weight:900;color:var(--gold);text-shadow:0 0 30px rgba(245,158,11,.8);text-align:center}
+#lvlup .sub{color:var(--txt);text-align:center;margin-top:6px;font-size:1.1rem}
+.banner{background:#1a2744;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:.82rem;color:var(--dim);margin-bottom:10px}
+.banner b{color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><span class="logo">🎮</span><h1>Secretary Cockpit</h1>
+    <button class="gear" id="gearBtn" title="設定">⚙️</button></header>
+  <div class="hero">
+    <div class="lvl"><div class="ring" id="lvlRing"><b id="lvlN">1</b></div><small>LEVEL</small></div>
+    <div><div class="xprow"><span>XP</span><span><b id="xpInto">0</b> / <span id="xpNeed">100</span></span></div>
+      <div class="xpbar"><i id="xpFill"></i></div><div class="totxp">総獲得 <b id="totXp">0</b> XP</div></div>
+    <div class="side"><div class="n" id="streakN">0</div><small><span id="streakIco">·</span> 連続</small>
+      <div class="qp" id="questQ">今日 0/3</div></div>
+  </div>
+  <section id="today" class="view on"></section>
+  <section id="progress" class="view"></section>
+  <section id="stats" class="view"></section>
+</div>
+<div id="toast"></div>
+<div id="lvlup"><div><div class="big" id="lvlupN">Lv.2</div><div class="sub">LEVEL UP!</div></div></div>
+<div id="modal"><div class="modal-box" id="modalBox"></div></div>
+<nav class="tabs">
+  <button class="on" data-t="today"><span class="i">✅</span>TODAY</button>
+  <button data-t="progress"><span class="i">🗺️</span>PROGRESS</button>
+  <button data-t="stats"><span class="i">📊</span>STATS</button>
+</nav>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="app.js"></script>
+</body>
+</html>
