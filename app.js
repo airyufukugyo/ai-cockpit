@@ -206,6 +206,27 @@ function sortTasks(ts) {
   if (sortMode === 'prio') a.sort((x, y) => (PRIORITY_RANK[x.priority] ?? 3) - (PRIORITY_RANK[y.priority] ?? 3));
   return a;
 }
+function dateNav(dates) {
+  const idx = dates.indexOf(viewDate);
+  const today = todayStr();
+  const opts = dates.map(d => {
+    const open = TASKS.filter(t => t.date === d && !t.done).length;
+    const tot = TASKS.filter(t => t.date === d).length;
+    const lbl = d + (d === today ? '（今日）' : '') + ' ・ ' + (open ? '未完' + open : '完了') + '/' + tot;
+    return `<option value="${d}"${d === viewDate ? ' selected' : ''}>${esc(lbl)}</option>`;
+  }).join('');
+  return `<div class="datenav">
+    <button id="dPrev"${idx >= dates.length - 1 ? ' disabled' : ''} aria-label="前の日">‹</button>
+    <select id="dateSel">${opts}</select>
+    <button id="dNext"${idx <= 0 ? ' disabled' : ''} aria-label="次の日">›</button>
+  </div>`;
+}
+function bindDateNav(dates) {
+  const sel = $('#dateSel'); if (sel) sel.onchange = () => { viewDate = sel.value; renderToday(); };
+  const idx = dates.indexOf(viewDate);
+  const p = $('#dPrev'); if (p) p.onclick = () => { if (idx < dates.length - 1) { viewDate = dates[idx + 1]; renderToday(); } };
+  const n = $('#dNext'); if (n) n.onclick = () => { if (idx > 0) { viewDate = dates[idx - 1]; renderToday(); } };
+}
 function bindTodoBar() {
   $$('#modeSeg button').forEach(b => b.onclick = () => { todoMode = b.dataset.m; renderToday(); });
   $$('#sortSeg button').forEach(b => b.onclick = () => { sortMode = b.dataset.s; renderToday(); });
@@ -232,10 +253,12 @@ function renderToday() {
   const dates = [...new Set(TASKS.map(t => t.date).filter(Boolean))].sort().reverse();
   const today = todayStr();
   if (!viewDate) viewDate = dates.includes(today) ? today : (dates.find(d => d <= today) || dates[0] || today);
+  if (!dates.includes(viewDate)) { dates.push(viewDate); dates.sort().reverse(); }
   const day = TASKS.filter(t => t.date === viewDate);
   let html = todoToolbar();
+  html += dateNav(dates);
   if (viewDate !== today) html += `<div class="banner">表示中: <b>${viewDate}</b>（今日 ${today} のタスクは未同期。PCで「Google送信」すると出ます）</div>`;
-  if (!day.length) { html += `<div class="empty"><p>表示できるタスクがありません。<br>PC側で日次ファイルを作成し「Google送信(push)」してください。</p></div>`; w.innerHTML = html; bindTodoBar(); return; }
+  if (!day.length) { html += `<div class="empty"><p>この日のタスクはありません。<br>上のセレクタで別の日を選べます。</p></div>`; w.innerHTML = html; bindTodoBar(); bindDateNav(dates); return; }
   const order = ['最優先', '通常', '余裕があれば', '完了', 'その他'];
   const secs = [...new Set(day.map(t => t.section))].sort((a, b) => (order.indexOf(a) + 99 * (order.indexOf(a) < 0)) - (order.indexOf(b) + 99 * (order.indexOf(b) < 0)));
   for (const sec of secs) {
@@ -244,6 +267,7 @@ function renderToday() {
   }
   w.innerHTML = html;
   bindTodoBar();
+  bindDateNav(dates);
   bindTodayCards();
 }
 function renderTodayAll(w) {
