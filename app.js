@@ -45,11 +45,21 @@ function login(interactive) {
     catch (e) { resolve(false); }
   });
 }
+// iOS standalone PWA はコールド起動直後のクロスオリジン fetch が "Load failed" で
+// 落ちることがある（通信は生きている）。数百ms空けて最大3回まで黙って再試行する。
+async function netFetch(url, opts, tries = 3) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try { return await fetch(url, opts); }
+    catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+  }
+  throw lastErr;
+}
 async function api(url, opts = {}) {
   if (!accessToken) { if (!await login(true)) throw new Error('ログインが必要です'); }
   opts.headers = Object.assign({ 'Authorization': 'Bearer ' + accessToken }, opts.headers || {});
-  let r = await fetch(url, opts);
-  if (r.status === 401) { accessToken = null; if (!await login(false)) throw new Error('認証切れ'); opts.headers.Authorization = 'Bearer ' + accessToken; r = await fetch(url, opts); }
+  let r = await netFetch(url, opts);
+  if (r.status === 401) { accessToken = null; if (!await login(false)) throw new Error('認証切れ'); opts.headers.Authorization = 'Bearer ' + accessToken; r = await netFetch(url, opts); }
   if (!r.ok) throw new Error('API ' + r.status);
   return r;
 }
@@ -400,7 +410,15 @@ async function loadAll() {
     viewDate = null;
     G = computeGamify();
     renderHero(); renderToday(); renderProgress(); renderStats();
-  } catch (e) { toast('読込失敗: ' + e.message); renderToday(); }
+  } catch (e) { toast('読込失敗: ' + e.message); renderLoadError(e.message); }
+}
+function renderLoadError(msg) {
+  const w = $('#today');
+  if (!w) return;
+  w.innerHTML = `<div class="empty"><p>読み込みに失敗しました。<br>通信が一時的に不安定なときに起きます。<br>もう一度お試しください。</p>
+    <p class="muted" style="font-size:.78rem;opacity:.6">詳細: ${esc(msg)}</p>
+    <button class="btn" id="retryBtn">再読み込み</button></div>`;
+  const b = $('#retryBtn'); if (b) b.onclick = () => { b.disabled = true; loadAll(); };
 }
 function switchTab(name) { $$('.view').forEach(v => v.classList.toggle('on', v.id === name)); $$('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === name)); }
 async function boot() {
