@@ -1,7 +1,7 @@
 /* Secretary Cockpit PWA - service worker.
    オフライン閲覧用にアプリシェルだけをキャッシュする。
    Google API（tasks/sheets）など別オリジンへのリクエストは絶対にキャッシュせず素通し。 */
-const CACHE = 'cockpit-v1';
+const CACHE = 'cockpit-v2';
 const SHELL = ['./', './index.html', './app.js', './manifest.json',
   './icon.svg', './defs.json'];
 

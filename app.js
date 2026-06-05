@@ -17,7 +17,10 @@ let TASKS = [];          // パース済みタスク
 let G = null;            // gamify スナップショット
 let REV = { month: 0, total: 0 };
 let viewDate = null;
+let todoMode = 'day';   // 'day'=この日 / 'all'=未完了すべて
+let sortMode = 'date';  // 'date'=日付順 / 'prio'=優先度順
 let accessToken = null, tokenClient = null, waiters = [], busy = false;
+const PRIORITY_RANK = { '高': 0, '通常': 1, '低': 2, '': 3 };
 
 function loadCfg() { try { return JSON.parse(localStorage.getItem('cockpit_cfg') || '{}'); } catch (e) { return {}; } }
 function saveCfg(c) { CFG = c; localStorage.setItem('cockpit_cfg', JSON.stringify(c)); }
@@ -72,7 +75,7 @@ function parseTask(t, listId, listTitle) {
   const date = (notes.match(/日付:\s*(\d{4}-\d{2}-\d{2})/) || [])[1] || (t.completed ? t.completed.slice(0, 10) : '');
   const section = (notes.match(/セクション:\s*([^\n]+)/) || [])[1] || 'その他';
   const text = (t.title || '') + ' ' + notes;
-  const priority = (notes.match(/優先度:\s*(高|通常|低)/) || [])[1] || '';
+  const priority = (notes.match(/優先度?:\s*(高|通常|低)/) || [])[1] || '';
   const due = (notes.match(/期限:\s*([^\n|]+)/) || [])[1] || '';
   const tags = (text.match(/#([A-Z]{2,3}-\d+|M\d+)/g) || []).map(x => x.slice(1));
   const body = notes.split('\n').filter(ln => !/^(セクション:|日付:|\[sid:)/.test(ln.trim())).join('\n').trim();
@@ -174,16 +177,48 @@ function renderHero() {
   $('#streakIco').textContent = G.streak > 0 ? '🔥' : '·';
   $('#questQ').textContent = '今日 ' + G.today_done + '/' + G.quest_target;
 }
-function taskCard(t) {
+function taskCard(t, showDate) {
   const tags = t.tags.map(x => `<span class="chip tag">#${esc(x)}</span>`).join('');
   const pr = t.priority ? `<span class="chip">優先度:${t.priority}</span>` : '';
   const due = t.due ? `<span class="chip due">⏰${esc(t.due)}</span>` : '';
+  const dchip = showDate ? `<span class="chip dt">📅${esc(t.date || '')}</span>` : '';
   const body = t.body ? `<div class="tbody"><pre>${esc(t.body)}</pre></div>` : '';
-  return `<div class="task${t.done ? ' done' : ''}" data-sid="${t.sid}">
+  return `<div class="task${t.done ? ' done' : ''}" data-sid="${t.sid}" data-date="${esc(t.date || '')}">
     <div class="trow"><div class="cb${t.done ? ' on' : ''}" data-act="check">
       <svg viewBox="0 0 18 18"><path d="M3 9l4 4 8-9"/></svg></div>
       <div class="tmain" data-act="toggle"><div class="tt">${esc(t.title)}</div>
-      <div class="badges">${pr}${due}${tags}<span class="chip xp">+${taskXp(t)}XP</span></div></div></div>${body}</div>`;
+      <div class="badges">${dchip}${pr}${due}${tags}<span class="chip xp">+${taskXp(t)}XP</span></div></div></div>${body}</div>`;
+}
+function todoToolbar() {
+  return `<div class="todobar">
+    <div class="seg" id="modeSeg">
+      <button data-m="day"${todoMode === 'day' ? ' class="on"' : ''}>📅 この日</button>
+      <button data-m="all"${todoMode === 'all' ? ' class="on"' : ''}>📋 未完了すべて</button>
+    </div>
+    <div class="seg" id="sortSeg">
+      <button data-s="date"${sortMode === 'date' ? ' class="on"' : ''}>日付順</button>
+      <button data-s="prio"${sortMode === 'prio' ? ' class="on"' : ''}>優先度順</button>
+    </div>
+  </div>`;
+}
+function sortTasks(ts) {
+  const a = ts.slice();
+  if (sortMode === 'prio') a.sort((x, y) => (PRIORITY_RANK[x.priority] ?? 3) - (PRIORITY_RANK[y.priority] ?? 3));
+  return a;
+}
+function bindTodoBar() {
+  $$('#modeSeg button').forEach(b => b.onclick = () => { todoMode = b.dataset.m; renderToday(); });
+  $$('#sortSeg button').forEach(b => b.onclick = () => { sortMode = b.dataset.s; renderToday(); });
+}
+function bindTodayCards() {
+  $$('#today .task').forEach(card => {
+    const sid = card.dataset.sid;
+    const cdate = card.dataset.date || viewDate;
+    card.querySelectorAll('[data-act]').forEach(el => el.onclick = e => {
+      if (el.dataset.act === 'check') { e.stopPropagation(); doCheck(sid, !card.classList.contains('done'), card, cdate); }
+      else card.classList.toggle('open');
+    });
+  });
 }
 function renderToday() {
   const w = $('#today');
@@ -193,32 +228,48 @@ function renderToday() {
     $('#loginBtn').onclick = () => login(true).then(ok => { if (ok) loadAll(); });
     return;
   }
+  if (todoMode === 'all') { renderTodayAll(w); return; }
   const dates = [...new Set(TASKS.map(t => t.date).filter(Boolean))].sort().reverse();
   const today = todayStr();
   if (!viewDate) viewDate = dates.includes(today) ? today : (dates.find(d => d <= today) || dates[0] || today);
   const day = TASKS.filter(t => t.date === viewDate);
-  let html = '';
+  let html = todoToolbar();
   if (viewDate !== today) html += `<div class="banner">表示中: <b>${viewDate}</b>（今日 ${today} のタスクは未同期。PCで「Google送信」すると出ます）</div>`;
-  if (!day.length) { html += `<div class="empty"><p>表示できるタスクがありません。<br>PC側で日次ファイルを作成し「Google送信(push)」してください。</p></div>`; w.innerHTML = html; return; }
+  if (!day.length) { html += `<div class="empty"><p>表示できるタスクがありません。<br>PC側で日次ファイルを作成し「Google送信(push)」してください。</p></div>`; w.innerHTML = html; bindTodoBar(); return; }
   const order = ['最優先', '通常', '余裕があれば', '完了', 'その他'];
   const secs = [...new Set(day.map(t => t.section))].sort((a, b) => (order.indexOf(a) + 99 * (order.indexOf(a) < 0)) - (order.indexOf(b) + 99 * (order.indexOf(b) < 0)));
   for (const sec of secs) {
     const ts = day.filter(t => t.section === sec);
-    html += `<div class="sec">${esc(sec)} <span class="cnt">${ts.filter(t => t.done).length}/${ts.length}</span></div>` + ts.map(taskCard).join('');
+    html += `<div class="sec">${esc(sec)} <span class="cnt">${ts.filter(t => t.done).length}/${ts.length}</span></div>` + sortTasks(ts).map(t => taskCard(t)).join('');
   }
   w.innerHTML = html;
-  $$('#today .task').forEach(card => {
-    const sid = card.dataset.sid;
-    card.querySelectorAll('[data-act]').forEach(el => el.onclick = e => {
-      if (el.dataset.act === 'check') { e.stopPropagation(); doCheck(sid, !card.classList.contains('done'), card); }
-      else card.classList.toggle('open');
-    });
-  });
+  bindTodoBar();
+  bindTodayCards();
 }
-async function doCheck(sid, done, card) {
+function renderTodayAll(w) {
+  const open = TASKS.filter(t => !t.done && t.date);
+  const dates = [...new Set(open.map(t => t.date))].sort().reverse();
+  let html = todoToolbar();
+  html += `<div class="allhdr">未完了 ${open.length} 件 ・ 全 ${dates.length} 日</div>`;
+  if (!open.length) { html += `<div class="empty"><p>未完了タスクはありません 🎉</p></div>`; w.innerHTML = html; bindTodoBar(); return; }
+  if (sortMode === 'prio') {
+    const flat = open.slice().sort((x, y) => (PRIORITY_RANK[x.priority] ?? 3) - (PRIORITY_RANK[y.priority] ?? 3) || (x.date < y.date ? 1 : -1));
+    html += flat.map(t => taskCard(t, true)).join('');
+  } else {
+    for (const d of dates) {
+      const ts = open.filter(t => t.date === d);
+      html += `<div class="sec">📅 ${esc(d)} <span class="cnt">${ts.length}</span></div>` + ts.map(t => taskCard(t)).join('');
+    }
+  }
+  w.innerHTML = html;
+  bindTodoBar();
+  bindTodayCards();
+}
+async function doCheck(sid, done, card, cdate) {
   if (busy) return; busy = true;
+  cdate = cdate || viewDate;
   card.classList.toggle('done', done); card.querySelector('.cb').classList.toggle('on', done);
-  const t = TASKS.find(x => x.sid === sid && x.date === viewDate) || TASKS.find(x => x.sid === sid);
+  const t = TASKS.find(x => x.sid === sid && x.date === cdate) || TASKS.find(x => x.sid === sid);
   const oldXp = G.total_xp, oldLv = G.level;
   try {
     await api(TASKS_API + '/lists/' + t.listId + '/tasks/' + t.taskId, {
@@ -230,6 +281,7 @@ async function doCheck(sid, done, card) {
     const dx = G.total_xp - oldXp; if (dx > 0) toast('+' + dx + ' XP');
     if (G.level > oldLv) setTimeout(() => levelup(G.level), 300);
     renderHero(); renderProgress(); renderStats();
+    if (todoMode === 'all' && done) setTimeout(renderToday, 250); // 完了は未完了一覧から外す
   } catch (e) {
     card.classList.toggle('done', !done); card.querySelector('.cb').classList.toggle('on', !done);
     toast('保存失敗');
